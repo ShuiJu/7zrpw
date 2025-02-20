@@ -71,7 +71,7 @@ const (
 	// 7Z格式相关常量
 	SEVEN_ZIP_MAGIC = "7z\xBC\xAF\x27\x1C"
 
-	VERSION = "v0.1.5.0-alpha"
+	VERSION = "v0.1.5.0-alpha.1"
 
 	// 添加 Windows API 常量和函数声明
 	WM_RBUTTONDOWN = 0x0204
@@ -796,34 +796,39 @@ func formatFileSize(size int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
 }
 
-// 函数说明：获取默认解压路径（去掉扩展名和分卷标识）
-// 参数：
-// archivePath: 压缩文件路径
-// 返回：解压路径
+// // 函数说明：获取默认解压路径（去掉扩展名和分卷标识）
+// // 参数：
+// // archivePath: 压缩文件路径
+// // 返回：解压路径
+// func getDefaultExtractPath(archivePath string) string {
+// 	// 获取文件名（不含扩展名）
+// 	baseName := filepath.Base(archivePath)
+// 	ext := filepath.Ext(baseName)
+// 	nameWithoutExt := strings.TrimSuffix(baseName, ext)
+
+// 	// 如果是分卷文件，去除分卷标识
+// 	switch {
+// 	case strings.HasSuffix(nameWithoutExt, ".7z"):
+// 		nameWithoutExt = strings.TrimSuffix(nameWithoutExt, ".7z")
+// 	case strings.HasSuffix(nameWithoutExt, ".zip"):
+// 		nameWithoutExt = strings.TrimSuffix(nameWithoutExt, ".zip")
+// 	case strings.HasSuffix(nameWithoutExt, ".rar"):
+// 		nameWithoutExt = strings.TrimSuffix(nameWithoutExt, ".rar")
+// 	}
+
+// 	// RAR分卷去除分卷标识（如 .part1, .part2 等）
+// 	if idx := strings.LastIndex(nameWithoutExt, ".part"); idx != -1 {
+// 		nameWithoutExt = nameWithoutExt[:idx]
+// 	}
+
+// 	// 返回解压目录名
+// 	return filepath.Join(filepath.Dir(archivePath), nameWithoutExt)
+// }
+// 直接返回压缩文件所在目录，而不是创建新文件夹
 func getDefaultExtractPath(archivePath string) string {
-	// 获取文件名（不含扩展名）
-	baseName := filepath.Base(archivePath)
-	ext := filepath.Ext(baseName)
-	nameWithoutExt := strings.TrimSuffix(baseName, ext)
-
-	// 如果是分卷文件，去除分卷标识
-	switch {
-	case strings.HasSuffix(nameWithoutExt, ".7z"):
-		nameWithoutExt = strings.TrimSuffix(nameWithoutExt, ".7z")
-	case strings.HasSuffix(nameWithoutExt, ".zip"):
-		nameWithoutExt = strings.TrimSuffix(nameWithoutExt, ".zip")
-	case strings.HasSuffix(nameWithoutExt, ".rar"):
-		nameWithoutExt = strings.TrimSuffix(nameWithoutExt, ".rar")
-	}
-
-	// RAR分卷去除分卷标识（如 .part1, .part2 等）
-	if idx := strings.LastIndex(nameWithoutExt, ".part"); idx != -1 {
-		nameWithoutExt = nameWithoutExt[:idx]
-	}
-
-	// 返回解压目录名
-	return filepath.Join(filepath.Dir(archivePath), nameWithoutExt)
+	return filepath.Dir(archivePath)
 }
+
 
 // 函数说明：格式化路径显示
 // 参数：
