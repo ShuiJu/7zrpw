@@ -71,7 +71,7 @@ const (
 	// 7Z格式相关常量
 	SEVEN_ZIP_MAGIC = "7z\xBC\xAF\x27\x1C"
 
-	VERSION = "v0.1.5"
+	VERSION = "v0.1.5.3.alpha"
 
 	// 添加 Windows API 常量和函数声明
 	WM_RBUTTONDOWN = 0x0204
@@ -124,31 +124,27 @@ type VersionInfo struct {
 	ForceUpdate bool   `json:"force_update"` // 确保字段名完全匹配
 }
 
-// 在 init() 函数中添加配置文件初始化
-func init() {
-	// 确保临时目录存在
-	tempDir := filepath.Join(os.TempDir(), "7zrpw")
-	os.MkdirAll(tempDir, 0755)
-
-	// 提取7z.exe到临时目录
-	sevenZipPath := filepath.Join(tempDir, "7z.exe")
-	if _, err := os.Stat(sevenZipPath); os.IsNotExist(err) {
-		err = os.WriteFile(sevenZipPath, sevenZipExe, 0755)
-		if err != nil {
-			panic(fmt.Sprintf("无法释放7z.exe: %v", err))
-		}
-	}
-
-	// 提取7z.dll到临时目录
-	dllPath := filepath.Join(tempDir, "7z.dll")
-	if _, err := os.Stat(dllPath); os.IsNotExist(err) {
-		err = os.WriteFile(dllPath, sevenZipDll, 0755)
-		if err != nil {
-			panic(fmt.Sprintf("无法释放7z.dll: %v", err))
-		}
-	}
-
+func extractFileIfNotExist(path string, data []byte) error {
+    if _, err := os.Stat(path); os.IsNotExist(err) {
+        return os.WriteFile(path, data, 0755)
+    }
+    return nil
 }
+
+func init() {
+    // 确保临时目录存在
+    tempDir := filepath.Join(os.TempDir(), "7zrpw")
+    os.MkdirAll(tempDir, 0755)
+
+    // 仅当文件不存在时才进行写入，避免不必要的磁盘 I/O
+    sevenZipPath := filepath.Join(tempDir, "7z.exe")
+    dllPath := filepath.Join(tempDir, "7z.dll")
+
+    _ = extractFileIfNotExist(sevenZipPath, sevenZipExe)
+    _ = extractFileIfNotExist(dllPath, sevenZipDll)
+	_ = user32.Load() // 预加载 DLL，减少后续调用时的开销
+}
+
 
 // 获取7z.exe路径
 // 说明：获取7z.exe路径
@@ -653,39 +649,23 @@ func findCompressFiles(dir string) []string {
 // 参数：
 // path: 密码文件路径
 // 返回：密码通道，密码数量，错误信息
-func readPasswordFile(path string) (<-chan string, int, error) {
-	passwordChan := make(chan string)
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, 0, err
-	}
+func readPasswordFile(path string) ([]string, error) {
+    file, err := os.Open(path)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
 
-	// 先统计有效密码数量
-	var count int
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if password := strings.TrimSpace(scanner.Text()); password != "" {
-			count++
-		}
-	}
-
-	// 重置文件指针到开始位置
-	file.Seek(0, 0)
-
-	// 启动goroutine读取密码
-	go func() {
-		defer file.Close()
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			if password := strings.TrimSpace(scanner.Text()); password != "" {
-				passwordChan <- password
-			}
-		}
-		close(passwordChan)
-	}()
-
-	return passwordChan, count, nil
+    var passwords []string
+    scanner := bufio.NewScanner(file)
+    for scanner.Scan() {
+        if password := strings.TrimSpace(scanner.Text()); password != "" {
+            passwords = append(passwords, password)
+        }
+    }
+    return passwords, scanner.Err()
 }
+
 
 // 函数说明：获取所有密码
 func getAllPasswords() ([]string, string, error) {
@@ -721,15 +701,14 @@ func getAllPasswords() ([]string, string, error) {
 
 	// 读取所有密码文件
 	for _, path := range uniquePaths {
-		if passwordChan, count, err := readPasswordFile(path); err == nil {
-			if count > 0 {
+		if passwords, err := readPasswordFile(path); err == nil {
+			if len(passwords) > 0 {
 				usedPaths = append(usedPaths, path)
-				filePasswords[path] = count
-				// 从 channel 中读取密码
-				for password := range passwordChan {
+				filePasswords[path] = len(passwords)
+				for _, password := range passwords {
 					passwordMap[password] = true
 				}
-			}
+			}			
 		}
 	}
 
@@ -1044,14 +1023,13 @@ func processArchive(archivePath string, passwords []string, passwordsInfo string
 
 // clearScreen 清除屏幕内容
 func clearScreen() {
-	switch runtime.GOOS {
-	case "windows":
-		cmd := exec.Command("cmd", "/c", "cls")
-		cmd.Stdout = os.Stdout
-		cmd.Run()
-	default: // linux, darwin, etc
-		fmt.Print("\033[H\033[2J") // ANSI 转义序列清屏
-	}
+    if runtime.GOOS == "windows" {
+        cmd := exec.Command("cmd", "/c", "cls")
+        cmd.Stdout = os.Stdout
+        cmd.Run()
+    } else {
+        fmt.Print("\033[H\033[2J")
+    }
 	fmt.Printf("---------------------------------------------------------------------\n")
 	fmt.Printf("欢迎使用 7zrpw 解压助手 %s\n", VERSION)
 	fmt.Printf("BY:hillghost86 \n")
@@ -1348,36 +1326,39 @@ func generateJWT(appKey, appSecret string, params map[string]interface{}) (strin
 	return token.SignedString([]byte(appSecret))
 }
 
-// CheckUpdate 检查更新
-func CheckUpdate(force bool) error {
-	// 创建更新管理器
-	manager, err := NewUpdateManager(VERSION)
-	if err != nil {
-		return fmt.Errorf("创建更新管理器失败: %v", err)
-	}
+// // CheckUpdate 检查更新
+// func CheckUpdate(force bool) error {
+// 	// 创建更新管理器
+// 	manager, err := NewUpdateManager(VERSION)
+// 	if err != nil {
+// 		return fmt.Errorf("创建更新管理器失败: %v", err)
+// 	}
 
-	// 执行更新检查
-	if err := manager.CheckUpdate(force); err != nil {
-		return err
-	}
+// 	// 执行更新检查
+// 	if err := manager.CheckUpdate(force); err != nil {
+// 		return err
+// 	}
 
-	// 如果用户选择不更新，直接返回
-	return nil
-}
+// 	// 如果用户选择不更新，直接返回
+// 	return nil
+// }
 
 // 主函数
 func main() {
-	// 创建更新管理器
-	updateManager, err := NewUpdateManager(VERSION)
-	if err != nil {
-		fmt.Printf("初始化更新管理器失败: %v\n", err)
-		return
-	}
+	// // 创建更新管理器
+	// updateManager, err := NewUpdateManager(VERSION)
+	// if err != nil {
+	// 	fmt.Printf("初始化更新管理器失败: %v\n", err)
+	// 	return
+	// }
 
-	// 检查更新
-	if err := updateManager.CheckUpdate(false); err != nil {
-		fmt.Printf("检查更新失败: %v\n", err)
-	}
+	// // 检查更新
+	// go func() {
+	// 	if err := updateManager.CheckUpdate(false); err != nil {
+	// 		fmt.Printf("检查更新失败: %v\n", err)
+	// 	}
+	// }()
+	
 
 	clearScreen()
 	//查询7zrpw.exe所在目录是否有passwd.txt文件，如果没有则创建
