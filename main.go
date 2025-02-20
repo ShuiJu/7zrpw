@@ -71,7 +71,7 @@ const (
 	// 7Z格式相关常量
 	SEVEN_ZIP_MAGIC = "7z\xBC\xAF\x27\x1C"
 
-	VERSION = "v0.1.5.3.alpha"
+	VERSION = "v0.1.5.0-alpha"
 
 	// 添加 Windows API 常量和函数声明
 	WM_RBUTTONDOWN = 0x0204
