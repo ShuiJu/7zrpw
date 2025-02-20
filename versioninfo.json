@@ -14,15 +14,15 @@
         }
     },
     "StringFileInfo": {
-        "CompanyName": "hillghost86",
-        "FileDescription": "7zrpw 解压助手",
-        "FileVersion": "v0.1.5",
+        "CompanyName": "ShuiJu",
+        "FileDescription": "7zrpw 解压助手 GPT改进版本",
+        "FileVersion": "v0.1.5.3.alpha",
         "InternalName": "7zrpw",
-        "LegalCopyright": "© 2024 hillghost86. All rights reserved.",
+        "LegalCopyright": "© 2025 ShuiJu. All rights reserved.",
         "OriginalFilename": "7zrpw.exe",
-        "ProductName": "7zrpw 解压助手",
+        "ProductName": "7zrpw 解压助手 GPT改进版本",
 
-        "ProductVersion": "v0.1.5"
+        "ProductVersion": "v0.1.5.3alpha"
     },
     "IconPath": "icon.ico"
 } 
